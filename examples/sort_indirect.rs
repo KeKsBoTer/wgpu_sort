@@ -66,7 +66,7 @@ async fn main(){
         z: 1
     };
 
-    queue.write_buffer(sort_buffers.info_buffer(), 0, bytes_of(&n));
+    queue.write_buffer(sort_buffers.state_buffer(), 0, bytes_of(&n));
 
     let dispatch_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor{
         label: Some("dispatch indirect buffer"),

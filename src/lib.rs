@@ -1,4 +1,4 @@
-
+#![doc = include_str!("../README.md")]
 /*
     This file implements a gpu version of radix sort. A good introduction to general purpose radix sort can
     be found here: http://www.codercorner.com/RadixSortRevisited.htm
@@ -58,6 +58,8 @@ const BYTES_PER_PAYLOAD_ELEM: u32 = 4;
 /// we sort 8 bits per pass so 4 passes are required for a 32 bit value
 const NUM_PASSES: u32 = BYTES_PER_PAYLOAD_ELEM;
 
+
+/// Sorting pipeline. It can be used to sort key-value pairs stored in [SortBuffers]
 pub struct GPUSorter {
     zero_p: wgpu::ComputePipeline,
     histogram_p: wgpu::ComputePipeline,
@@ -66,18 +68,7 @@ pub struct GPUSorter {
     scatter_odd_p: wgpu::ComputePipeline,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-pub struct SorterState {
-    num_keys: u32,
-    padded_size: u32,
-    even_pass: u32,
-    odd_pass: u32,
-}
-
 impl GPUSorter {
-    // The new call also needs the queue to be able to determine the maximum subgroup size (Does so by running test runs)
-
     pub fn new(device: &wgpu::Device, subgroup_size: u32) -> Self {
         // special variables for scatter shade
         let histogram_sg_size = subgroup_size;
@@ -182,8 +173,7 @@ impl GPUSorter {
         };
     }
 
-    // layouts used by the sorting pipeline, as the dispatch buffer has to be in separate bind group
-    pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         return device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("radix sort bind group layout"),
             entries: &[
@@ -253,7 +243,7 @@ impl GPUSorter {
         });
     }
 
-    pub fn create_keyval_buffers(
+    fn create_keyval_buffers(
         device: &wgpu::Device,
         length: u32,
     ) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer, wgpu::Buffer) {
@@ -466,16 +456,17 @@ impl GPUSorter {
     }
 
 
-    /// writes sort commands to command encoder
-    /// if sort_first_n is not none one the first n elements are sorted
-    /// otherwise everything is sorted
-    /// IMPORTANT: if less than the whole buffer is sorted the rest of the keys buffer will be be corrupted
+    /// Writes sort commands to command encoder.
+    /// If sort_first_n is not none one the first n elements are sorted
+    /// otherwise everything is sorted.
+    ///
+    /// **IMPORTANT**: if less than the whole buffer is sorted the rest of the keys buffer will be be corrupted
     pub fn sort(&self, encoder: &mut wgpu::CommandEncoder,queue:&wgpu::Queue, sort_buffers: &SortBuffers, sort_first_n:Option<u32>) {
         let bind_group = &sort_buffers.bind_group;
         let num_elements = sort_first_n.unwrap_or(sort_buffers.len());
 
         // write number of elements to buffer
-        queue.write_buffer(&sort_buffers.uniform_buffer, 0, bytes_of(&num_elements));
+        queue.write_buffer(&sort_buffers.state_buffer, 0, bytes_of(&num_elements));
 
 
         self.record_calculate_histogram(bind_group, num_elements, encoder);
@@ -483,12 +474,18 @@ impl GPUSorter {
         self.record_scatter_keys(bind_group, num_elements, encoder);
     }
 
-    /// initiates sorting with an indirect call
-    /// the dispatch buffer must contain the struct wgpu::util::DispatchIndirectArgs
+    /// Initiates sorting with an indirect call.
+    /// The dispatch buffer must contain the struct [wgpu::util::DispatchIndirectArgs].
+    ///
     /// number of y and z workgroups must be 1 
-    /// `x = (N + HISTO_BLOCK_KVS- 1 )/HISTO_BLOCK_KVS`
+    ///
+    /// x = (N + [HISTO_BLOCK_KVS]- 1 )/[HISTO_BLOCK_KVS], 
     /// where N are the first N elements to be sorted
-    /// IMPORTANT: if less than the whole buffer is sorted the rest of the keys buffer will most likely be corrupted. 
+    ///
+    /// [SortBuffers::state_buffer] contains the number of keys that will be sorted.
+    /// This is set to sort the whole buffer by default.
+    ///
+    /// **IMPORTANT**: if less than the whole buffer is sorted the rest of the keys buffer will most likely be corrupted. 
     pub fn sort_indirect(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -502,6 +499,7 @@ impl GPUSorter {
         self.record_scatter_keys_indirect(bind_group, dispatch_buffer, encoder);
     }
 
+    /// creates all buffers necessary for sorting
     pub fn create_sort_buffers(&self, device: &wgpu::Device, length: NonZeroU32) -> SortBuffers {
         let length = length.get();
 
@@ -552,13 +550,27 @@ impl GPUSorter {
             payload_a,
             payload_b,
             internal_mem_buffer,
-            uniform_buffer,
+            state_buffer: uniform_buffer,
             bind_group,
             length,
         }
     }
 }
 
+
+/// Struct containing information about the state of the sorter.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct SorterState {
+    /// number of first n keys that will be sorted
+    pub num_keys: u32,
+    padded_size: u32,
+    even_pass: u32,
+    odd_pass: u32,
+}
+
+/// Struct containing all buffers necessary for sorting.
+/// The key and value buffers can be read and written.
 pub struct SortBuffers {
     /// keys that are sorted
     keys_a: wgpu::Buffer,
@@ -575,8 +587,8 @@ pub struct SortBuffers {
     #[allow(dead_code)]
     internal_mem_buffer: wgpu::Buffer,
 
-    /// uniform buffer used for sorting
-    uniform_buffer: wgpu::Buffer,
+    /// state buffer used for sorting
+    state_buffer: wgpu::Buffer,
 
     /// bind group used for sorting
     bind_group: wgpu::BindGroup,
@@ -586,31 +598,33 @@ pub struct SortBuffers {
 }
 
 impl SortBuffers {
+    /// number of key-value pairs that can be stored in this buffer
     pub fn len(&self) -> u32 {
         self.length
     }
 
-    /// buffer storing the keys values
-    /// WARN: this buffer has padding bytes at the end
-    ///       use SortBuffers::keys_valid_size to get the valid size
+    /// Buffer storing the keys values.
+    /// 
+    /// **WARNING**: this buffer has padding bytes at the end
+    ///        use [SortBuffers::keys_valid_size] to get the valid size.
     pub fn keys(&self) -> &wgpu::Buffer {
         &self.keys_a
     }
 
-    /// the keys buffer has padding bytes
-    /// this function returns the number of bytes without padding
+    /// The keys buffer has padding bytes.
+    /// This function returns the number of bytes without padding
     pub fn keys_valid_size(&self) -> u64 {
         (self.len() * RS_KEYVAL_SIZE) as u64
     }
 
-    /// buffer containing the values
+    /// Buffer containing the values
     pub fn values(&self) -> &wgpu::Buffer {
         &self.payload_a
     }
 
-    /// Buffer containing a SorterState
-    pub fn info_buffer(&self)->&wgpu::Buffer{
-        &self.uniform_buffer
+    /// Buffer containing a [SorterState]
+    pub fn state_buffer(&self)->&wgpu::Buffer{
+        &self.state_buffer
     }
 }
 

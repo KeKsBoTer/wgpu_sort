@@ -7,6 +7,7 @@ use wgpu::util::DeviceExt;
 
 use crate::GPUSorter;
 
+#[doc(hidden)]
 /// only used for testing 
 /// temporally used for guessing subgroup size
 pub fn upload_to_buffer<T: bytemuck::Pod>(
@@ -23,6 +24,7 @@ pub fn upload_to_buffer<T: bytemuck::Pod>(
     encoder.copy_buffer_to_buffer(&staging_buffer, 0, buffer, 0, staging_buffer.size());
 }
 
+#[doc(hidden)]
 /// only used for testing 
 /// temporally used for guessing subgroup size
 pub async fn download_buffer<T: Clone + bytemuck::Pod>(
@@ -87,8 +89,8 @@ async fn test_sort(sorter: &GPUSorter, device: &wgpu::Device, queue: &wgpu::Queu
     return sorted.into_iter().zip(sorted_data.into_iter()).all(|(a,b)|a==b);
 }
 
-/// function guesses the subgroup size by testing the sorter with
-/// subgroup sizes 1,8,16,32,64,128 and returning the largest subgroup size that worked
+/// Function guesses the best subgroup size by testing the sorter with
+/// subgroup sizes 1,8,16,32,64,128 and returning the largest subgroup size that worked.
 pub async fn guess_workgroup_size(device: &wgpu::Device, queue: &wgpu::Queue) -> Option<u32> {
     let mut cur_sorter: GPUSorter;
 

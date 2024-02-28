@@ -109,7 +109,7 @@ fn apply_sort_indirect(encoder:&mut wgpu::CommandEncoder,device:&wgpu::Device,qu
         z: 1
     };
 
-    queue.write_buffer(sort_buffers.info_buffer(), 0, bytes_of(&nelm));
+    queue.write_buffer(sort_buffers.state_buffer(), 0, bytes_of(&nelm));
 
     let dispatch_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor{
         label: Some("dispatch indirect buffer"),

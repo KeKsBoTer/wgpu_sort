@@ -3,7 +3,18 @@ name = "wgpu_sort"
 version = "0.1.0"
 edition = "2021"
 authors = ["Simon Niedermayr", "Josef Stumpfegger"]
+license = "BSD-2"
+description = " WebGPU/wgpu Radix Key-Value Sort "
+repository = "https://github.com/KeKsBoTer/wgpu_sort"
+homepage = "https://github.com/KeKsBoTer/wgpu_sort"
+documentation = "https://docs.rs/wgpu_sort"
+keywords = ["wgpu", "gpu", "sort","radxi","wgpu"]
+categories = ["rendering","algorithms"]
+readme = "README.md"
 
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 wgpu = { version = "0.19.1" }
@@ -24,3 +35,13 @@ criterion = { version = "0.4", features = ["html_reports"] }
 [[bench]]
 name = "sort"
 harness = false
+
+
+[[example]]
+name = "sort"
+
+[[example]]
+name = "sort_indirect"
+
+[[test]]
+name = "sort"
