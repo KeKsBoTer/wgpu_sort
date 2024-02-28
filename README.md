@@ -1,5 +1,8 @@
 # WebGPU Radix Key-Value Sort
 
+[![crates.io version](https://img.shields.io/crates/v/wgpu_sort.svg)](https://crates.io/crates/wgpu_sort) [![Documentation](https://docs.rs/wgpu_sort/badge.svg)](https://docs.rs/wgpu_sort/)
+
+
 This package implements a GPU version of radix sort. A good introduction to general purpose radix sort can be found here: <http://www.codercorner.com/RadixSortRevisited.htm>
 
 The GPU radix sort implemented here is a re-implementation of the Vulkan radix sort found in the fuchsia repos: <https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/src/graphics/lib/compute/radix_sort/>.
