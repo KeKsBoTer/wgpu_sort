@@ -17,7 +17,7 @@ readme = "README.md"
 all-features = true
 
 [dependencies]
-wgpu = { version = "0.19.1" }
+wgpu = { version = "0.20" }
 bytemuck = { version = "1.13.0", features = ["derive"] }
 futures-intrusive = "0.5.0"
 
