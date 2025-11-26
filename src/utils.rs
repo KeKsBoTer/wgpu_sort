@@ -48,10 +48,8 @@ pub async fn download_buffer<T: Clone + bytemuck::Pod>(
 
     // download buffer
     let buffer_slice = download_buffer.slice(range);
-    let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
-    buffer_slice.map_async(wgpu::MapMode::Read, move |result| tx.send(result).unwrap());
-    device.poll(wgpu::Maintain::Wait);
-    rx.receive().await.unwrap().unwrap();
+    buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
+    device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None }).unwrap();
 
     let data = buffer_slice.get_mapped_range();
     return bytemuck::cast_slice(data.deref()).to_vec();
@@ -77,7 +75,7 @@ async fn test_sort(sorter: &GPUSorter, device: &wgpu::Device, queue: &wgpu::Queu
 
     sorter.sort(&mut encoder, queue, &sort_buffers,None);
     let idx = queue.submit([encoder.finish()]);
-    device.poll(wgpu::Maintain::WaitForSubmissionIndex(idx));
+    device.poll(wgpu::PollType::Wait {submission_index: Some(idx), timeout: None }).unwrap();
 
     let sorted = download_buffer::<f32>(
         &sort_buffers.keys(),

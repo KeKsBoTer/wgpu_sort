@@ -9,7 +9,7 @@ use wgpu_sort::{utils::{download_buffer, guess_workgroup_size, upload_to_buffer}
 
 #[pollster::main]
 async fn main(){
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
 
     let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
         .await
@@ -20,9 +20,11 @@ async fn main(){
             &wgpu::DeviceDescriptor {
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::default(),
+                experimental_features: Default::default(),
+                memory_hints: Default::default(),
                 label: None,
+                trace: Default::default(),
             },
-            None,
         )
         .await
         .unwrap();
@@ -78,7 +80,7 @@ async fn main(){
 
     // wait for sorter to fininsh
     let idx = queue.submit([encoder.finish()]);
-    device.poll(wgpu::Maintain::WaitForSubmissionIndex(idx));
+    device.poll(wgpu::PollType::Wait { submission_index: Some(idx), timeout: None }).unwrap();
 
     // keys buffer has padding at the end
     // so we only download the "valid" data
