@@ -137,49 +137,54 @@ impl GPUSorter {
             label: Some("Zero the histograms"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "zero_histograms",
+            entry_point: Some("zero_histograms"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let histogram_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("calculate_histogram"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "calculate_histogram",
+            entry_point: Some("calculate_histogram"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let prefix_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("prefix_histogram"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "prefix_histogram",
+            entry_point: Some("prefix_histogram"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let scatter_even_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("scatter_even"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "scatter_even",
+            entry_point: Some("scatter_even"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let scatter_odd_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("scatter_odd"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "scatter_odd",
+            entry_point: Some("scatter_odd"),
             compilation_options: Default::default(),
+            cache: None,
         });
 
-        return Self {
+        Self {
             zero_p,
             histogram_p,
             prefix_p,
             scatter_even_p,
             scatter_odd_p,
-        };
+        }
     }
 
     fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        return device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("radix sort bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -245,7 +250,7 @@ impl GPUSorter {
                     count: None,
                 },
             ],
-        });
+        })
     }
 
     fn create_keyval_buffers(
@@ -289,7 +294,7 @@ impl GPUSorter {
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        return (keys, keys_aux, payload, payload_aux);
+        (keys, keys_aux, payload, payload_aux)
     }
 
     // calculates and allocates a buffer that is sufficient for holding all needed information for
@@ -319,7 +324,7 @@ impl GPUSorter {
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        return buffer;
+        buffer
     }
 
     fn general_info_data(length: u32) -> SorterState {
@@ -404,7 +409,7 @@ impl GPUSorter {
         });
 
         pass.set_pipeline(&self.prefix_p);
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, bind_group, &[]);
         pass.dispatch_workgroups(NUM_PASSES as u32, 1, 1);
     }
 
@@ -548,7 +553,6 @@ impl GPUSorter {
                 },
             ],
         });
-        // return (uniform_buffer, bind_group);
         SortBuffers {
             keys_a,
             keys_b,
