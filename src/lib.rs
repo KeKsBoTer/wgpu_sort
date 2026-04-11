@@ -58,7 +58,6 @@ const BYTES_PER_PAYLOAD_ELEM: u32 = 4;
 /// we sort 8 bits per pass so 4 passes are required for a 32 bit value
 const NUM_PASSES: u32 = BYTES_PER_PAYLOAD_ELEM;
 
-
 /// Sorting pipeline. It can be used to sort key-value pairs stored in [SortBuffers]
 pub struct GPUSorter {
     zero_p: wgpu::ComputePipeline,
@@ -89,8 +88,8 @@ impl GPUSorter {
         let pipeline_layout: wgpu::PipelineLayout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("radix sort pipeline layout"),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
             });
 
         let raw_shader: &str = include_str!("radix_sort.wgsl");
@@ -137,36 +136,41 @@ impl GPUSorter {
             label: Some("Zero the histograms"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "zero_histograms",
+            entry_point: Some("zero_histograms"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let histogram_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("calculate_histogram"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "calculate_histogram",
+            entry_point: Some("calculate_histogram"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let prefix_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("prefix_histogram"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "prefix_histogram",
+            entry_point: Some("prefix_histogram"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let scatter_even_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("scatter_even"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "scatter_even",
+            entry_point: Some("scatter_even"),
             compilation_options: Default::default(),
+            cache: None,
         });
         let scatter_odd_p = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("scatter_odd"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "scatter_odd",
+            entry_point: Some("scatter_odd"),
             compilation_options: Default::default(),
+            cache: None,
         });
 
         return Self {
@@ -273,7 +277,7 @@ impl GPUSorter {
             mapped_at_creation: false,
         });
 
-        let payload_size = length * BYTES_PER_PAYLOAD_ELEM; // make sure that we have at least 1 byte of data;
+        let payload_size = count_ru_histo * BYTES_PER_PAYLOAD_ELEM; // make sure that we have at least 1 byte of data;
         let payload = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("radix sort payload buffer"),
             size: payload_size as u64,
@@ -404,7 +408,7 @@ impl GPUSorter {
         });
 
         pass.set_pipeline(&self.prefix_p);
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, bind_group, &[]);
         pass.dispatch_workgroups(NUM_PASSES as u32, 1, 1);
     }
 
@@ -415,7 +419,6 @@ impl GPUSorter {
         encoder: &mut wgpu::CommandEncoder,
     ) {
         let scatter_blocks_ru = scatter_blocks_ru(length);
-
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Scatter keyvals"),
             timestamp_writes: None,
@@ -460,19 +463,23 @@ impl GPUSorter {
         pass.dispatch_workgroups_indirect(dispatch_buffer, 0);
     }
 
-
     /// Writes sort commands to command encoder.
     /// If sort_first_n is not none one the first n elements are sorted
     /// otherwise everything is sorted.
     ///
     /// **IMPORTANT**: if less than the whole buffer is sorted the rest of the keys buffer will be be corrupted
-    pub fn sort(&self, encoder: &mut wgpu::CommandEncoder,queue:&wgpu::Queue, sort_buffers: &SortBuffers, sort_first_n:Option<u32>) {
+    pub fn sort(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        queue: &wgpu::Queue,
+        sort_buffers: &SortBuffers,
+        sort_first_n: Option<u32>,
+    ) {
         let bind_group = &sort_buffers.bind_group;
         let num_elements = sort_first_n.unwrap_or(sort_buffers.len());
 
         // write number of elements to buffer
         queue.write_buffer(&sort_buffers.state_buffer, 0, bytes_of(&num_elements));
-
 
         self.record_calculate_histogram(bind_group, num_elements, encoder);
         self.record_prefix_histogram(bind_group, encoder);
@@ -482,15 +489,15 @@ impl GPUSorter {
     /// Initiates sorting with an indirect call.
     /// The dispatch buffer must contain the struct [wgpu::util::DispatchIndirectArgs].
     ///
-    /// number of y and z workgroups must be 1 
+    /// number of y and z workgroups must be 1
     ///
-    /// x = (N + [HISTO_BLOCK_KVS]- 1 )/[HISTO_BLOCK_KVS], 
+    /// x = (N + [HISTO_BLOCK_KVS]- 1 )/[HISTO_BLOCK_KVS],
     /// where N are the first N elements to be sorted
     ///
     /// [SortBuffers::state_buffer] contains the number of keys that will be sorted.
     /// This is set to sort the whole buffer by default.
     ///
-    /// **IMPORTANT**: if less than the whole buffer is sorted the rest of the keys buffer will most likely be corrupted. 
+    /// **IMPORTANT**: if less than the whole buffer is sorted the rest of the keys buffer will most likely be corrupted.
     pub fn sort_indirect(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -562,7 +569,6 @@ impl GPUSorter {
     }
 }
 
-
 /// Struct containing information about the state of the sorter.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
@@ -609,7 +615,7 @@ impl SortBuffers {
     }
 
     /// Buffer storing the keys values.
-    /// 
+    ///
     /// **WARNING**: this buffer has padding bytes at the end
     ///        use [SortBuffers::keys_valid_size] to get the valid size.
     pub fn keys(&self) -> &wgpu::Buffer {
@@ -628,7 +634,7 @@ impl SortBuffers {
     }
 
     /// Buffer containing a [SorterState]
-    pub fn state_buffer(&self)->&wgpu::Buffer{
+    pub fn state_buffer(&self) -> &wgpu::Buffer {
         &self.state_buffer
     }
 }
