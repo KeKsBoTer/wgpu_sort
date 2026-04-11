@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 use crate::GPUSorter;
 
 #[doc(hidden)]
-/// only used for testing 
+/// only used for testing
 /// temporally used for guessing subgroup size
 pub fn upload_to_buffer<T: bytemuck::Pod>(
     encoder: &mut wgpu::CommandEncoder,
@@ -25,7 +25,7 @@ pub fn upload_to_buffer<T: bytemuck::Pod>(
 }
 
 #[doc(hidden)]
-/// only used for testing 
+/// only used for testing
 /// temporally used for guessing subgroup size
 pub async fn download_buffer<T: Clone + bytemuck::Pod>(
     buffer: &wgpu::Buffer,
@@ -50,7 +50,7 @@ pub async fn download_buffer<T: Clone + bytemuck::Pod>(
     let buffer_slice = download_buffer.slice(range);
     let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |result| tx.send(result).unwrap());
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     rx.receive().await.unwrap().unwrap();
 
     let data = buffer_slice.get_mapped_range();
@@ -75,9 +75,14 @@ async fn test_sort(sorter: &GPUSorter, device: &wgpu::Device, queue: &wgpu::Queu
         scrambled_data.as_slice(),
     );
 
-    sorter.sort(&mut encoder, queue, &sort_buffers,None);
+    sorter.sort(&mut encoder, queue, &sort_buffers, None);
     let idx = queue.submit([encoder.finish()]);
-    device.poll(wgpu::Maintain::WaitForSubmissionIndex(idx));
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(idx),
+            timeout: None,
+        })
+        .unwrap();
 
     let sorted = download_buffer::<f32>(
         &sort_buffers.keys(),
@@ -86,7 +91,10 @@ async fn test_sort(sorter: &GPUSorter, device: &wgpu::Device, queue: &wgpu::Queu
         0..sort_buffers.keys_valid_size(),
     )
     .await;
-    return sorted.into_iter().zip(sorted_data.into_iter()).all(|(a,b)|a==b);
+    return sorted
+        .into_iter()
+        .zip(sorted_data.into_iter())
+        .all(|(a, b)| a == b);
 }
 
 /// Function guesses the best subgroup size by testing the sorter with
